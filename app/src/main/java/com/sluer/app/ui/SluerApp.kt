@@ -21,9 +21,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.sluer.app.ui.screens.BatteryScreen
+import com.sluer.app.ui.screens.BoostScreen
 import com.sluer.app.ui.screens.ConsoleScreen
+import com.sluer.app.ui.screens.DebloatScreen
 import com.sluer.app.ui.screens.HomeScreen
-import com.sluer.app.ui.screens.PlaceholderScreen
+import com.sluer.app.ui.screens.TweaksScreen
 
 private enum class Tab(val label: String) {
     HOME("Home"),
@@ -71,22 +74,10 @@ fun SluerApp() {
             when {
                 showConsole -> ConsoleScreen(onBack = { showConsole = false })
                 tab == Tab.HOME -> HomeScreen(onOpenConsole = { showConsole = true })
-                tab == Tab.BOOST -> PlaceholderScreen(
-                    title = "Boost",
-                    message = "One-tap memory cleanup and force-stop of a custom app list is coming in the next build.",
-                )
-                tab == Tab.DEBLOAT -> PlaceholderScreen(
-                    title = "Debloat",
-                    message = "Disable or uninstall system apps (fully reversible) is coming in the next build.",
-                )
-                tab == Tab.BATTERY -> PlaceholderScreen(
-                    title = "Battery",
-                    message = "Per-app standby buckets and Doze whitelist control is coming in the next build.",
-                )
-                tab == Tab.TWEAKS -> PlaceholderScreen(
-                    title = "Tweaks",
-                    message = "Animation scales, Private DNS and background process limit tweaks are coming in the next build.",
-                )
+                tab == Tab.BOOST -> BoostScreen()
+                tab == Tab.DEBLOAT -> DebloatScreen()
+                tab == Tab.BATTERY -> BatteryScreen()
+                tab == Tab.TWEAKS -> TweaksScreen()
             }
         }
     }
