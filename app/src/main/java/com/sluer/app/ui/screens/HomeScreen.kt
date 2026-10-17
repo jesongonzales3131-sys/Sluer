@@ -53,6 +53,7 @@ private fun formatGb(bytes: Long): String =
 fun HomeScreen(onOpenConsole: () -> Unit) {
     val context = LocalContext.current
     val status by ShizukuShell.status.collectAsState()
+    val lastError by ShizukuShell.lastError.collectAsState()
 
     LaunchedEffect(Unit) { ShizukuShell.refresh(context) }
 
@@ -105,7 +106,7 @@ fun HomeScreen(onOpenConsole: () -> Unit) {
                         ShellStatus.PERMISSION_REQUIRED -> "permission needed"
                         ShellStatus.PERMISSION_DENIED -> "permission denied"
                         ShellStatus.SHIZUKU_NOT_RUNNING -> "start Shizuku app first"
-                        ShellStatus.ERROR -> "error - check Shizuku app"
+                        ShellStatus.ERROR -> lastError?.let { "error: $it" } ?: "error - check Shizuku app"
                         ShellStatus.UNKNOWN -> "unknown"
                     },
                 )

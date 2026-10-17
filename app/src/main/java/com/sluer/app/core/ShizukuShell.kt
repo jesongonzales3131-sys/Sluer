@@ -6,6 +6,7 @@ import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.IBinder
 import android.os.RemoteException
+import android.util.Log
 import com.sluer.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,10 +33,23 @@ object ShizukuShell {
 
     const val PERMISSION_REQUEST_CODE = 4001
 
+    private const val LOG_TAG = "SluerShell"
+
     private const val SERVICE_TAG = "sluer_runner"
+
+    /**
+     * Shizuku UserServiceArgs requires a process name suffix (it throws
+     * "process name suffix must not be null" otherwise). The user service
+     * runs in the process "<applicationId>:sluer".
+     */
+    private const val PROCESS_NAME_SUFFIX = "sluer"
 
     private val _status = MutableStateFlow(ShellStatus.UNKNOWN)
     val status: StateFlow<ShellStatus> = _status.asStateFlow()
+
+    /** Detail of the last failure, shown on the dashboard when status is ERROR. */
+    private val _lastError = MutableStateFlow<String?>(null)
+    val lastError: StateFlow<String?> = _lastError.asStateFlow()
 
     private var service: IRunnerService? = null
     private var bound = false
@@ -68,7 +82,9 @@ object ShizukuShell {
         try {
             Shizuku.requestPermission(PERMISSION_REQUEST_CODE)
         } catch (t: Throwable) {
+            _lastError.value = "${t.javaClass.simpleName}: ${t.message}"
             _status.value = ShellStatus.ERROR
+            Log.e(LOG_TAG, "requestPermission failed", t)
         }
     }
 
@@ -110,7 +126,15 @@ object ShizukuShell {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             service = binder?.let { IRunnerService.Stub.asInterface(it) }
             bound = true
-            _status.value = if (service != null) ShellStatus.READY else ShellStatus.ERROR
+            if (service != null) {
+                _lastError.value = null
+                _status.value = ShellStatus.READY
+                Log.i(LOG_TAG, "runner user service connected")
+            } else {
+                _lastError.value = "empty binder received"
+                _status.value = ShellStatus.ERROR
+                Log.e(LOG_TAG, "runner user service returned an empty binder")
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -131,11 +155,15 @@ object ShizukuShell {
                 ComponentName(context.packageName, RunnerService::class.java.name)
             )
                 .daemon(false)
+                .processNameSuffix(PROCESS_NAME_SUFFIX)
+                .debuggable(BuildConfig.DEBUG)
                 .tag(SERVICE_TAG)
                 .version(BuildConfig.VERSION_CODE)
             Shizuku.bindUserService(args, connection)
         } catch (t: Throwable) {
+            _lastError.value = "${t.javaClass.simpleName}: ${t.message}"
             _status.value = ShellStatus.ERROR
+            Log.e(LOG_TAG, "bindUserService failed", t)
         }
     }
 
