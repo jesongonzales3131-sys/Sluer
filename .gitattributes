@@ -1,0 +1,5 @@
+# Normalize text files to LF so shell scripts (gradlew) work on the Linux CI
+# runner regardless of the committing OS.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.jar binary
