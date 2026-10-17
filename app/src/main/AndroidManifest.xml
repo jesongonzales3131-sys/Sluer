@@ -2,6 +2,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Used by the in-app update checker (GitHub releases API). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Needed later by the Debloat module to resolve labels/icons of every
          installed package. The shell command listing itself does not need it. -->
     <uses-permission

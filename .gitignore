@@ -9,3 +9,5 @@ captures/
 .cxx/
 .kotlin/
 apk/
+keystore/
+*.p12

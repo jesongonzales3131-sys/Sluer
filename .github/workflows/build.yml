@@ -1,4 +1,4 @@
-name: Build debug APK
+name: Build signed release APK
 
 on:
   push:
@@ -28,14 +28,21 @@ jobs:
       - name: Ensure Android SDK packages
         run: sdkmanager --install "platforms;android-37" "build-tools;36.0.0" || true
 
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
+      - name: Decode release keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > keystore.p12
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace
+      - name: Build signed release APK
+        env:
+          KEYSTORE_FILE: keystore.p12
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: sluer-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: sluer-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
