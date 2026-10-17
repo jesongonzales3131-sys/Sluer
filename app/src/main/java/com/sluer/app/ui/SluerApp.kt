@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
@@ -25,12 +26,14 @@ import com.sluer.app.ui.screens.BatteryScreen
 import com.sluer.app.ui.screens.BoostScreen
 import com.sluer.app.ui.screens.ConsoleScreen
 import com.sluer.app.ui.screens.DebloatScreen
+import com.sluer.app.ui.screens.FreezeScreen
 import com.sluer.app.ui.screens.HomeScreen
 import com.sluer.app.ui.screens.TweaksScreen
 
 private enum class Tab(val label: String) {
     HOME("Home"),
     BOOST("Boost"),
+    FREEZE("Freeze"),
     DEBLOAT("Debloat"),
     BATTERY("Battery"),
     TWEAKS("Tweaks"),
@@ -39,6 +42,7 @@ private enum class Tab(val label: String) {
 private fun iconFor(tab: Tab): ImageVector = when (tab) {
     Tab.HOME -> Icons.Default.Home
     Tab.BOOST -> Icons.Default.PlayArrow
+    Tab.FREEZE -> Icons.Default.Lock
     Tab.DEBLOAT -> Icons.Default.Delete
     Tab.BATTERY -> Icons.Default.Star
     Tab.TWEAKS -> Icons.Default.Settings
@@ -75,6 +79,7 @@ fun SluerApp() {
                 showConsole -> ConsoleScreen(onBack = { showConsole = false })
                 tab == Tab.HOME -> HomeScreen(onOpenConsole = { showConsole = true })
                 tab == Tab.BOOST -> BoostScreen()
+                tab == Tab.FREEZE -> FreezeScreen()
                 tab == Tab.DEBLOAT -> DebloatScreen()
                 tab == Tab.BATTERY -> BatteryScreen()
                 tab == Tab.TWEAKS -> TweaksScreen()

@@ -2,6 +2,9 @@ package com.sluer.app.ui.screens
 
 import android.app.ActivityManager
 import android.content.Context
+import android.os.Build
+import android.os.Environment
+import android.os.StatFs
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.sluer.app.core.ShizukuShell
 import com.sluer.app.core.SluerPrefs
+import com.sluer.app.core.isCriticalPackage
+import com.sluer.app.core.loadPackages
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -50,6 +55,13 @@ private fun availMem(context: Context): Long {
 private fun fmtGb(bytes: Long): String =
     "%.2f GB".format(bytes.toDouble() / (1024.0 * 1024.0 * 1024.0))
 
+private fun fmtSize(bytes: Long): String =
+    if (bytes >= 1024L * 1024L * 1024L) fmtGb(bytes)
+    else "%.0f MB".format(bytes.toDouble() / (1024.0 * 1024.0))
+
+private fun freeStorage(): Long =
+    StatFs(Environment.getDataDirectory().path).availableBytes
+
 @Composable
 fun BoostScreen() {
     val context = LocalContext.current
@@ -62,7 +74,13 @@ fun BoostScreen() {
     var memBefore by remember { mutableStateOf<Long?>(null) }
     var memAfter by remember { mutableStateOf<Long?>(null) }
     var refreshKey by remember { mutableIntStateOf(0) }
+    var cleaning by remember { mutableStateOf(false) }
+    var cleanProgress by remember { mutableStateOf("") }
+    var cleanLog by remember { mutableStateOf("") }
+    var storageBefore by remember { mutableStateOf<Long?>(null) }
+    var storageAfter by remember { mutableStateOf<Long?>(null) }
     val memNow = remember(refreshKey) { availMem(context) }
+    val storageNow = remember(refreshKey) { freeStorage() }
 
     fun updateKillList(list: List<String>) {
         killList = list
@@ -89,6 +107,42 @@ fun BoostScreen() {
             log = sb.toString().trim()
             refreshKey++
             running = false
+        }
+    }
+
+    fun cleanCaches() {
+        if (cleaning) return
+        cleaning = true
+        storageBefore = freeStorage()
+        storageAfter = null
+        cleanLog = ""
+        scope.launch {
+            val sb = StringBuilder()
+            if (Build.VERSION.SDK_INT >= 30) {
+                val pkgs = loadPackages(context).filter { !it.isSystem && !isCriticalPackage(it.pkg) }
+                var ok = 0
+                pkgs.forEachIndexed { i, p ->
+                    cleanProgress = "Clearing ${i + 1}/${pkgs.size}: ${p.label}"
+                    val out = ShizukuShell.exec("pm clear --cache-only ${p.pkg}").trim()
+                    val failed = out.startsWith("!") ||
+                        out.contains("Failure", ignoreCase = true) ||
+                        out.contains("Error", ignoreCase = true)
+                    if (!failed) ok++
+                }
+                sb.append("Cleared cache of $ok/${pkgs.size} apps")
+            } else {
+                sb.append("Per-app cache clearing needs Android 11+")
+            }
+            cleanProgress = "Global sweep..."
+            sb.append('\n').append("$ pm trim-caches 999999G")
+            val trim = ShizukuShell.exec("pm trim-caches 999999G").trim()
+            if (trim.isNotBlank()) sb.append('\n').append(trim)
+            delay(1500)
+            storageAfter = freeStorage()
+            cleanLog = sb.toString()
+            refreshKey++
+            cleanProgress = ""
+            cleaning = false
         }
     }
 
@@ -138,6 +192,53 @@ fun BoostScreen() {
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(if (running) "Boosting..." else "Boost now")
+                }
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text("Cache cleaner", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Deletes only cached files (keeps logins and data). Can free a lot of storage.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Text("Free space", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(110.dp))
+                    Text(fmtSize(storageNow), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                }
+                storageBefore?.let { before ->
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Text("Before", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(110.dp))
+                        Text(fmtSize(before), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    }
+                }
+                storageAfter?.let { after ->
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Text("After", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(110.dp))
+                        Text(fmtSize(after), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    }
+                    val before = storageBefore ?: after
+                    val delta = after - before
+                    Text(
+                        if (delta >= 0) "Freed ${fmtSize(delta)}" else "${fmtSize(-delta)} more used",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Button(
+                    onClick = { cleanCaches() },
+                    enabled = !cleaning && !running,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(if (cleaning) cleanProgress.ifBlank { "Cleaning..." } else "Clear app caches")
+                }
+                if (cleanLog.isNotBlank()) {
+                    Text(cleanLog, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                 }
             }
         }

@@ -3,14 +3,16 @@ package com.sluer.app.core
 import android.content.Context
 
 /**
- * Persistent on-device state: the force-stop kill list for Boost and the
- * list of packages uninstalled for user 0 (so they can be restored later).
+ * Persistent on-device state: the force-stop kill list for Boost, the list of
+ * packages uninstalled for user 0 (so they can be restored later) and the
+ * list of frozen (suspended) packages so they can be unfrozen later.
  */
 object SluerPrefs {
 
     private const val FILE = "sluer_state"
     private const val KEY_KILL = "kill_list"
     private const val KEY_UNINSTALLED = "uninstalled_log"
+    private const val KEY_FROZEN = "frozen_log"
 
     private val DEFAULT_KILL_LIST = listOf(
         "com.facebook.katana",
@@ -50,5 +52,18 @@ object SluerPrefs {
     fun removeUninstalled(context: Context, pkg: String) {
         val updated = uninstalled(context).toMutableSet().apply { remove(pkg) }
         prefs(context).edit().putStringSet(KEY_UNINSTALLED, updated).apply()
+    }
+
+    fun frozen(context: Context): List<String> =
+        (prefs(context).getStringSet(KEY_FROZEN, emptySet()) ?: emptySet()).sorted()
+
+    fun addFrozen(context: Context, pkg: String) {
+        val updated = frozen(context).toMutableSet().apply { add(pkg) }
+        prefs(context).edit().putStringSet(KEY_FROZEN, updated).apply()
+    }
+
+    fun removeFrozen(context: Context, pkg: String) {
+        val updated = frozen(context).toMutableSet().apply { remove(pkg) }
+        prefs(context).edit().putStringSet(KEY_FROZEN, updated).apply()
     }
 }

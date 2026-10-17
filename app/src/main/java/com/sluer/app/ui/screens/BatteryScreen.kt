@@ -1,6 +1,7 @@
 package com.sluer.app.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -67,10 +69,13 @@ fun BatteryScreen() {
     ) {
         Text("Battery", style = MaterialTheme.typography.headlineSmall)
         Text(
-            "Control Doze bypass and per-app standby buckets.",
+            "Control Doze bypass, per-app standby buckets and background restrictions.",
             style = MaterialTheme.typography.bodySmall,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             FilterChip(
                 selected = mode == 0,
                 onClick = { mode = 0 },
@@ -81,8 +86,13 @@ fun BatteryScreen() {
                 onClick = { mode = 1 },
                 label = { Text("Standby buckets") },
             )
+            FilterChip(
+                selected = mode == 2,
+                onClick = { mode = 2 },
+                label = { Text("Background") },
+            )
         }
-        if (mode == 0) DozeSection() else BucketSection()
+        if (mode == 0) DozeSection() else if (mode == 1) BucketSection() else BackgroundSection()
     }
 }
 
@@ -374,4 +384,123 @@ private fun BucketDialog(info: PkgInfo, onDismiss: () -> Unit) {
             TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") }
         },
     )
+}
+
+@Composable
+private fun ColumnScope.BackgroundSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var apps by remember { mutableStateOf<List<PkgInfo>?>(null) }
+    var restricted by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var query by remember { mutableStateOf("") }
+    var showRestrictedOnly by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf("") }
+
+    suspend fun reload() {
+        fun parse(out: String): Set<String> = out.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("!") && !it.contains(' ') && it.contains('.') }
+            .toSet()
+        val a = ShizukuShell.exec("cmd appops query-op RUN_IN_BACKGROUND deny")
+        val b = ShizukuShell.exec("cmd appops query-op RUN_ANY_IN_BACKGROUND deny")
+        restricted = parse(a) + parse(b)
+    }
+
+    LaunchedEffect(Unit) {
+        apps = loadPackages(context).filter { !it.isSystem }
+        reload()
+    }
+
+    fun toggle(pkg: String, restrict: Boolean) {
+        if (busy) return
+        busy = true
+        scope.launch {
+            val mode = if (restrict) "deny" else "default"
+            ShizukuShell.exec("cmd appops set $pkg RUN_IN_BACKGROUND $mode")
+            ShizukuShell.exec("cmd appops set $pkg RUN_ANY_IN_BACKGROUND $mode")
+            note = "${if (restrict) "Restricted" else "Allowed"}: $pkg"
+            reload()
+            busy = false
+        }
+    }
+
+    Text(
+        "Block apps from running in the background at all. Stronger than standby buckets. Reversible anytime.",
+        style = MaterialTheme.typography.bodySmall,
+    )
+    if (note.isNotBlank()) {
+        Text(note, fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+    }
+    OutlinedTextField(
+        value = query,
+        onValueChange = { query = it },
+        label = { Text("Search apps") },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+    )
+    FilterChip(
+        selected = showRestrictedOnly,
+        onClick = { showRestrictedOnly = !showRestrictedOnly },
+        label = { Text("Restricted only") },
+    )
+
+    when (val list = apps) {
+        null -> {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+        else -> {
+            val filtered = list
+                .filter {
+                    query.isBlank() ||
+                        it.label.contains(query, ignoreCase = true) ||
+                        it.pkg.contains(query, ignoreCase = true)
+                }
+                .filter { !showRestrictedOnly || it.pkg in restricted }
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                items(filtered, key = { it.pkg }) { p ->
+                    val isRestricted = p.pkg in restricted
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(p.label, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                            Text(
+                                p.pkg,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
+                        if (isRestricted) {
+                            Text(
+                                "restricted",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(end = 6.dp),
+                            )
+                        }
+                        TextButton(
+                            onClick = { toggle(p.pkg, !isRestricted) },
+                            enabled = !busy,
+                            contentPadding = PaddingValues(horizontal = 8.dp),
+                        ) {
+                            Text(if (isRestricted) "Allow" else "Restrict")
+                        }
+                    }
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
 }
